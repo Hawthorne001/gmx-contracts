@@ -31,6 +31,7 @@ describe("PriceFeedTimelock", function () {
   let timelock
   let vaultTimelock
   let fastPriceEvents
+  let mockPyth
   let fastPriceFeed
 
   beforeEach(async () => {
@@ -92,11 +93,14 @@ describe("PriceFeedTimelock", function () {
     await router.setGov(timelock.address)
 
     fastPriceEvents = await deployContract("FastPriceEvents", [])
+    mockPyth = await deployContract("MockPyth", [])
     fastPriceFeed = await deployContract("FastPriceFeed", [
+      mockPyth.address, // _pyth
       5 * 60, // _priceDuration
       60 * 60, // _maxPriceUpdateDelay
       2, // _minBlockInterval
       250, // _allowedDeviationBasisPoints
+      vaultPriceFeed.address, // _vaultPriceFeed
       fastPriceEvents.address, // _fastPriceEvents
       tokenManager.address // _tokenManager
     ])
@@ -158,17 +162,10 @@ describe("PriceFeedTimelock", function () {
   })
 
   it("setBuffer", async () => {
-    const timelock0 = await deployContract("Timelock", [
+    const timelock0 = await deployContract("PriceFeedTimelock", [
       user1.address, // _admin
       3 * 24 * 60 * 60, // _buffer
       tokenManager.address, // _tokenManager
-      mintReceiver.address, // _mintReceiver
-      user0.address, // _glpManager
-      user0.address, // _prevGlpManager
-      user1.address, // _rewardRouter
-      1000, // _maxTokenSupply
-      10, // marginFeeBasisPoints
-      100 // maxMarginFeeBasisPoints
     ])
     await expect(timelock0.connect(user0).setBuffer(3 * 24 * 60 * 60 - 10))
       .to.be.revertedWith("Timelock: forbidden")
@@ -209,15 +206,6 @@ describe("PriceFeedTimelock", function () {
     expect(await vaultPriceFeed.priceSampleSpace()).eq(3)
     await timelock.connect(wallet).setPriceSampleSpace(vaultPriceFeed.address, 1)
     expect(await vaultPriceFeed.priceSampleSpace()).eq(1)
-  })
-
-  it("setVaultPriceFeed", async () => {
-    await expect(timelock.connect(user0).setVaultPriceFeed(fastPriceFeed.address, vaultPriceFeed.address))
-      .to.be.revertedWith("Timelock: forbidden")
-
-    expect(await fastPriceFeed.vaultPriceFeed()).eq(AddressZero)
-    await timelock.connect(wallet).setVaultPriceFeed(fastPriceFeed.address, vaultPriceFeed.address)
-    expect(await fastPriceFeed.vaultPriceFeed()).eq(vaultPriceFeed.address)
   })
 
   it("setPriceDuration", async () => {
